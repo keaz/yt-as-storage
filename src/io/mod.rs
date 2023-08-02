@@ -18,11 +18,13 @@ impl InputHandler {
         InputHandler { file }
     }
 
-    pub fn read_random(&mut self, offset: u64, buf: &mut [u8]) -> bool {
+    pub fn read_random(&mut self, offset: u64, buf: &mut [u8]) -> usize {
+        debug!("Reading offset {:?}",offset);
         self.file.seek(SeekFrom::Start(offset)).unwrap();
         let read_data = self.file.read(buf).unwrap();
+        debug!("Data read {:?}",read_data);
 
-        read_data == 0
+        read_data   
     }
 }
 
