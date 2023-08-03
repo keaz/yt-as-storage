@@ -48,7 +48,7 @@ fn main() {
     //         }
 
     //         if y == image_size {
-    //             img.save_with_format(format!("{}/out_{}.jpg",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
+    //             img.save_with_format(format!("{}/out_{}.tiff",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
     //             img = ImageBuffer::new(image_size,image_size);
     //             seq = seq +1;
     //             x = 0;
@@ -72,7 +72,7 @@ fn main() {
 
     //         if y == image_size { 
     //             // img.save(format!("{}/out_{}.jpg",&cmd.output_path,seq)).unwrap();
-    //             img.save_with_format(format!("{}/out_{}.jpg",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
+    //             img.save_with_format(format!("{}/out_{}.tiff",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
     //             break;
     //         }
     //     }
