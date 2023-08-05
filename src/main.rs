@@ -1,120 +1,141 @@
-use std::env;
+pub mod io;
+pub mod cmd;
 
+use cmd::CmdArgs;
+use io::{InputHandler, OutputHandler};
+use std::{env, fs, fs::{OpenOptions}, io::{prelude::*}, process::{Command}, time::Duration};
+use std::process::exit;
 use clap::Parser;
 use env_logger::Env;
-use image::{Rgb, ImageBuffer, RgbImage, ImageFormat};
-use log::{info, debug};
-use yt_as_storage::{cmd::CmdArgs, io::{InputHandler, OutputHandler}};
-
+use log::info;
+use indicatif::{ProgressBar, ProgressStyle};
 
 fn main() {
-    let cmd = CmdArgs::parse_from(env::args_os());
-    env_logger::init_from_env(Env::default().default_filter_or("debug"));
-    let mut input_handler = InputHandler::new(&cmd.file_path);
-    let output_file = format!("{}/tibco",&cmd.output_path);
-    let mut output_handler = OutputHandler::new(&output_file);
-    let buf_size: usize = 255;
-    let image_size: u32 = (buf_size).try_into().unwrap();
-    let mut buf = vec![0;buf_size];
-    let mut offset = 0;
-    let mut pixcel_clunt = 0;
 
-    // let mut img: RgbImage = ImageBuffer::new(image_size,image_size);
-    
+    io::create_dirs();
 
-    // let mut x = 0;
-    // let mut y = 0;
-    // let mut seq = 1;
-    
-    // loop {
-    //     let read_data = input_handler.read_random(offset, &mut buf);
-    //     if read_data == 0 {
-    //         break;
-    //     }
-    //     if read_data < buf_size {
-    //         buf = buf[..read_data].to_vec();
-    //     }
+    loop {
+        let cmd = CmdArgs::parse_from(env::args_os());
 
-    //     buf.iter().for_each(|data| {
-    //         println!("x::{:?} Data {:?}",x,data);
-    //         pixcel_clunt = pixcel_clunt +1;
-    //         let pixel = img.get_pixel_mut(x, y);
+        let mut line = String::new();
+        println!("Enter encode or decode (e/d) of the input file? [q for quit]:");
+        std::io::stdin().read_line(&mut line).unwrap();
 
-    //         *pixel = image::Rgb([*data,*data,*data]);
-    //         x = x +1;
-    //         if x == image_size {
-    //             y = y +1;
-    //             x = 0;
-    //         }
-
-    //         if y == image_size {
-    //             img.save_with_format(format!("{}/out_{}.tiff",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
-    //             img = ImageBuffer::new(image_size,image_size);
-    //             seq = seq +1;
-    //             x = 0;
-    //             y = 0;
-    //         }
-    //     });  
-    //     offset = offset + 256;
-    //     buf = vec![0;buf_size];
-    // }
-
-    // if x != image_size || y != image_size {
-    //     loop {
-    //         let pixel = img.get_pixel_mut(x, y);
-
-    //         *pixel = image::Rgb([255,0,0]);
-    //         x = x +1;
-    //         if x == image_size {
-    //             y = y +1;
-    //             x = 0;
-    //         }
-
-    //         if y == image_size { 
-    //             // img.save(format!("{}/out_{}.jpg",&cmd.output_path,seq)).unwrap();
-    //             img.save_with_format(format!("{}/out_{}.tiff",&cmd.output_path,seq), ImageFormat::Jpeg).unwrap();
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // debug!("Data in pixels {}",pixcel_clunt);
-
-    let mut output_handler = OutputHandler::new(&output_file);
-    
-    let mut image = image::open(&cmd.file_path).unwrap();
-    let imgbuf = image.as_mut_rgb8().unwrap();
-
-    buf = vec![];
-    
-    offset = 0;
-    let mut old_y = 0;
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        // println!("X: {:?}",x);
-        let buf_index:usize = x.try_into().unwrap();
-        if y == old_y {
-            println!("Data {:?}",buf);
-            output_handler.write_random(offset, &buf);
-            let ln = buf.len() as u64;
-            offset = offset + ln;
-            // buf_index = 0;
-            buf = vec![];
-            // 
-            // old_y = y;
+        if line.trim_end().to_string() == "e" {
+            create_video_out(cmd);
+        } else if line.trim_end().to_string() == "d" {
+            read_video_in();
+        } else if line.trim_end().to_string() == "q" {
+            exit(0);
         }
-        let data = pixel.0;
-        // debug!("X::{},R {}, G {}, B {} ",x,data[0],data[1],data[2]);
-        if data[0] == data[1] && data[0] == data[2] {
-            pixcel_clunt = pixcel_clunt + 1;
-            println!("X::{:?}, data[0] {:?}",x,data[0]);
-            buf.push(data[0]);
-            // buf.insert(buf_index, data[0]);
-            // buf[buf_index] = data[0];
-            // buf_index = buf_index + 1;
-        }
-        // *pixel = image::Rgb([r, 0, b]);
     }
-    output_handler.write_random(offset, &buf);
-    debug!("Data in pixels {}",pixcel_clunt);
-    
+
+}
+
+pub fn create_video_out(cmd: CmdArgs) {
+
+    let prog = progress();
+
+    let mut input_handler = InputHandler::new(&cmd.file_path);
+
+    env_logger::init_from_env(Env::default().default_filter_or("debug"));
+
+    let res_bit = (256*144)/8 as u64;
+    let buf_size = res_bit as usize;
+    let mut buf = vec![0;buf_size];
+    let mut offset = 0 as u64;
+    let mut img_index = 1;
+
+    io::clear_vid2fps();
+
+    loop {
+        let read_data = input_handler.read_input_data(offset, &mut buf);
+        if read_data == 0 {
+            break;
+        }
+        if read_data < buf_size {
+            buf = buf[..read_data].to_vec();
+        }
+
+        OutputHandler::encode_frames(&buf, format!("{:04}", img_index).as_str());
+        offset = offset + res_bit + 1;
+        buf = vec![0;buf_size];
+        img_index += 1;
+    }
+
+    io::clear_vidout();
+
+    info!("Combining frames");
+    Command::new("cmd")
+        .args(&["/C", "ffmpeg -framerate 1 -i vid2fps/output%04d.png -r 30 vidout/video.mp4"]).output()
+        .expect("failed to execute process");
+
+    io::clear_vid2fps();
+
+    prog.finish_with_message("Successfully created the video.\n");
+}
+
+pub fn read_video_in() {
+    let prog = progress();
+
+    let mut img_index = 0;
+
+    io::clear_vid2fps();
+
+    info!("Extracting the video to frames");
+    Command::new("cmd")
+        .args(&["/C", "ffmpeg -i vidout/video.mp4 -vf fps=1 vid2fps/extracted%04d.png"]).output()
+        .expect("failed to execute process");
+
+    let frame_count = fs::read_dir("vid2fps").unwrap().count();
+
+    fs::remove_file("out.txt").ok();
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(true)
+        .open("out.txt")
+        .unwrap();
+
+    loop {
+        img_index += 1;
+
+        let data = OutputHandler::decode_frames(format!("{:04}", img_index).as_str());
+
+        if let Err(e) = writeln!(file, "{}", data.as_str()) {
+            eprintln!("Couldn't write to file: {}", e);
+        }
+
+        if img_index == frame_count {
+            break;
+        }
+    }
+
+    prog.finish_with_message("Successfully decoded the video.\n");
+}
+
+fn progress() -> ProgressBar {
+    let pb = ProgressBar::new_spinner();
+    pb.enable_steady_tick(Duration::from_millis(120));
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.red} {msg}")
+            .unwrap()
+            .tick_strings(&[
+                "  ▶⛔       ◀ ",
+                " ▶  ⛔      ◀ ",
+                " ▶   ⛔     ◀ ",
+                " ▶    ⛔    ◀ ",
+                " ▶     ⛔   ◀ ",
+                " ▶      ⛔  ◀ ",
+                " ▶       ⛔◀  ",
+                " ▶      ⛔  ◀ ",
+                " ▶     ⛔   ◀ ",
+                " ▶    ⛔    ◀ ",
+                " ▶   ⛔     ◀ ",
+                " ▶  ⛔      ◀ "
+            ]),
+    );
+    pb.set_message("Processing...");
+
+    pb
 }
