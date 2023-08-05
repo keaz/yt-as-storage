@@ -1,28 +1,24 @@
 pub mod io;
 pub mod cmd;
+pub mod utils;
 
-use cmd::CmdArgs;
 use io::{InputHandler, OutputHandler};
-use std::{env, fs, fs::{OpenOptions}, io::{prelude::*}, process::{Command}, time::Duration};
+use std::{fs, fs::{OpenOptions}, io::{prelude::*}, process::{Command}};
 use std::process::exit;
-use clap::Parser;
-use env_logger::Env;
 use log::info;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 
 fn main() {
 
-    io::create_dirs();
+    io::create_dirs(vec!["vid2fps", "vidout", "vidin", "textout", "textin"]);
 
     loop {
-        let cmd = CmdArgs::parse_from(env::args_os());
-
         let mut line = String::new();
         println!("Enter encode or decode (e/d) of the input file? [q for quit]:");
         std::io::stdin().read_line(&mut line).unwrap();
 
         if line.trim_end().to_string() == "e" {
-            create_video_out(cmd);
+            create_video_out();
         } else if line.trim_end().to_string() == "d" {
             read_video_in();
         } else if line.trim_end().to_string() == "q" {
@@ -32,13 +28,9 @@ fn main() {
 
 }
 
-pub fn create_video_out(cmd: CmdArgs) {
+pub fn create_video_out() {
 
-    let prog = progress();
-
-    let mut input_handler = InputHandler::new(&cmd.file_path);
-
-    env_logger::init_from_env(Env::default().default_filter_or("debug"));
+    let mut input_handler = InputHandler::new(&io::get_first_in_dir(fs::read_dir("textin")));
 
     let res_bit = (256*144)/8 as u64;
     let buf_size = res_bit as usize;
@@ -47,6 +39,9 @@ pub fn create_video_out(cmd: CmdArgs) {
     let mut img_index = 1;
 
     io::clear_vid2fps();
+
+    info!("Generating frames: ");
+    let progress_bar = ProgressBar::new(input_handler.get_file_size()/res_bit);
 
     loop {
         let read_data = input_handler.read_input_data(offset, &mut buf);
@@ -61,40 +56,47 @@ pub fn create_video_out(cmd: CmdArgs) {
         offset = offset + res_bit + 1;
         buf = vec![0;buf_size];
         img_index += 1;
+        progress_bar.inc(1);
     }
-
-    io::clear_vidout();
+    progress_bar.finish_with_message("Frame generation done");
 
     info!("Combining frames");
-    Command::new("cmd")
+
+    let progress_spinner = utils::progress();
+
+    io::clear_vidout();
+    Command::new("powershell")
         .args(&["/C", "ffmpeg -framerate 1 -i vid2fps/output%04d.png -r 30 vidout/video.mp4"]).output()
         .expect("failed to execute process");
 
     io::clear_vid2fps();
 
-    prog.finish_with_message("Successfully created the video.\n");
+    progress_spinner.finish_with_message("Successfully created the video.\n");
 }
 
 pub fn read_video_in() {
-    let prog = progress();
+    info!("Reading the frames from the video");
+
+    let progress_spinner = utils::progress();
 
     let mut img_index = 0;
 
     io::clear_vid2fps();
 
-    info!("Extracting the video to frames");
-    Command::new("cmd")
-        .args(&["/C", "ffmpeg -i vidout/video.mp4 -vf fps=1 vid2fps/extracted%04d.png"]).output()
-        .expect("failed to execute process");
+    let ffmpeg_cmd = &format!("ffmpeg -i '{}' -vf fps=1 vid2fps/extracted%04d.png", io::get_first_in_dir(fs::read_dir("vidin")));
+
+    Command::new("powershell")
+        .args(&["/C", &ffmpeg_cmd]).output()
+        .unwrap();
 
     let frame_count = fs::read_dir("vid2fps").unwrap().count();
 
-    fs::remove_file("out.txt").ok();
+    fs::remove_file("textout/decoded_video.txt").ok();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
-        .open("out.txt")
+        .open("textout/decoded_video.txt")
         .unwrap();
 
     loop {
@@ -111,31 +113,5 @@ pub fn read_video_in() {
         }
     }
 
-    prog.finish_with_message("Successfully decoded the video.\n");
-}
-
-fn progress() -> ProgressBar {
-    let pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(Duration::from_millis(120));
-    pb.set_style(
-        ProgressStyle::with_template("{spinner:.red} {msg}")
-            .unwrap()
-            .tick_strings(&[
-                "  ▶⛔       ◀ ",
-                " ▶  ⛔      ◀ ",
-                " ▶   ⛔     ◀ ",
-                " ▶    ⛔    ◀ ",
-                " ▶     ⛔   ◀ ",
-                " ▶      ⛔  ◀ ",
-                " ▶       ⛔◀  ",
-                " ▶      ⛔  ◀ ",
-                " ▶     ⛔   ◀ ",
-                " ▶    ⛔    ◀ ",
-                " ▶   ⛔     ◀ ",
-                " ▶  ⛔      ◀ "
-            ]),
-    );
-    pb.set_message("Processing...");
-
-    pb
+    progress_spinner.finish_with_message("Successfully decoded the video.\n");
 }

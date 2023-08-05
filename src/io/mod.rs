@@ -8,7 +8,7 @@ use image::{
     Rgb, RgbImage,
     imageops::{resize, Nearest}
 };
-use log::{debug, info};
+use log::debug;
 
 pub struct InputHandler {
     file: File,
@@ -22,11 +22,15 @@ impl InputHandler {
         InputHandler { file }
     }
 
+    pub fn get_file_size(&mut self) -> u64 {
+        self.file.metadata().unwrap().len()
+    }
+
     pub fn read_input_data(&mut self, offset: u64, buf: &mut [u8]) -> usize {
-        debug!("Reading offset {:?}",offset);
+        // debug!("Reading offset {:?}",offset);
         self.file.seek(SeekFrom::Start(offset)).unwrap();
         let read_data = self.file.read(buf).unwrap();
-        debug!("Data read {:?}",read_data);
+        // debug!("Data read {:?}",read_data);
 
         read_data   
     }
@@ -41,7 +45,6 @@ impl OutputHandler {
 
         let mut img = RgbImage::new(256, 144);
 
-        info!("Generating frame {}...", img_index);
         let mut all_bits = "".to_string();
         buf.iter().for_each(|&bit| {
             let each_bit = format!("{:08b}", bit);
@@ -62,9 +65,7 @@ impl OutputHandler {
 
         let img_scaled = resize(&img, 1280, 720, Nearest);
 
-        let mut img_name: String = "vid2fps/output".to_owned();
-        img_name.push_str(img_index);
-        img_name.push_str(".png");
+        let img_name = &format!("vid2fps/output{}.png", img_index);
 
         // write it out to a file
         img_scaled.save(img_name).unwrap();
@@ -133,13 +134,30 @@ pub fn clear_vid2fps() {
 }
 
 pub fn clear_vidout() {
-    let vid2fps_dir = fs::read_dir("vidout");
-    delete_dir_contents(vid2fps_dir);
+    let vidout_dir = fs::read_dir("vidout");
+    delete_dir_contents(vidout_dir);
 }
 
-pub fn create_dirs() {
-    fs::create_dir_all("vid2fps").expect("Failed to create vid2fps dir");
-    fs::create_dir_all("vidout").expect("Failed to create vidout dir");
+pub fn create_dirs(dirs: Vec<&str>) {
+    for dir in dirs {
+        fs::create_dir_all(dir).expect(format!("Failed to create {} dir", dir).as_str());
+    }
+}
+
+pub fn get_first_in_dir(read_dir_res: Result<ReadDir, Error>) -> String {
+    let mut out: String = "".to_string();
+    if let Ok(dir) = read_dir_res {
+        for entry in dir {
+            out = entry.unwrap().path().display().to_string();
+            break;
+        }
+    };
+
+    if out.len() == 0 {
+        panic!("Nothing in the vidin directory.");
+    }
+
+    out
 }
 
 fn delete_dir_contents(read_dir_res: Result<ReadDir, Error>) {
