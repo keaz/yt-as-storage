@@ -13,8 +13,9 @@ use std::env;
 
 
 use std::sync::mpsc::channel;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::{fs, fs::OpenOptions, io::prelude::*, process::Command};
+use crossbeam_utils::sync::WaitGroup;
 
 use crate::io::Data;
 
@@ -58,8 +59,13 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
         .build()
         .unwrap();
     let (sender, receiver) = channel();
+
+
+    let wg = WaitGroup::new();
+
     for img_index in 1..total_frames + 1 {
         let mut input_handler = input_handler.clone();
+        let wg = wg.clone();
 
         let sender = sender.clone();
         pool.spawn(move || {
@@ -75,12 +81,18 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
 
             let data = Data::new(img_index, buf);
             sender.send(data).unwrap();
+            drop(wg);
         });
     }
 
+    wg.wait();
+
+    let wg = WaitGroup::new();
+    let mut index = 0;
     for data in receiver {
         let output_folder = output_folder.clone();
         let progress_bar = progress_bar.clone();
+        let wg = wg.clone();
         pool.spawn(move || {
             OutputHandler::encode_frames(
                 &data.buf,
@@ -89,9 +101,15 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
             );
             debug!("Encoding image {}", data.index);
             progress_bar.inc(1);
+            drop(wg);
         });
+        index +=1;
+        if index == total_frames {
+            break;
+        }
     }
 
+    wg.wait();
     progress_bar.finish_with_message("Frame generation done");
 
     info!("Combining frames");
@@ -99,7 +117,7 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
     let progress_spinner = utils::progress();
 
     io::clear_vidout(output_folder);
-    execute_video_out_ffmped();
+    execute_video_out_ffmped(output_folder);
 
     io::clear_vid2fps(output_folder);
 
@@ -107,22 +125,25 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
 }
 
 #[cfg(target_os = "windows")]
-fn execute_video_out_ffmped() {
+fn execute_video_out_ffmped(output_path: &String) {
+    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}vidout/video.mp4",output_path,output_path);
     Command::new("powershell")
         .args(&[
             "/C",
-            "ffmpeg -framerate 1 -i vid2fps/output%04d.png -r 30 vidout/video.mp4",
+            &cmd,
         ])
         .output()
         .expect("failed to execute process");
 }
 
 #[cfg(target_os = "linux")]
-fn execute_video_out_ffmped() {
+fn execute_video_out_ffmped(output_path: &String) {
+
+    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",output_path,output_path);
     Command::new("sh")
         .args(&[
             "-c",
-            "ffmpeg -framerate 1 -i vid2fps/output%04d.png -r 30 vidout/video.mp4",
+            &cmd,
         ])
         .output()
         .unwrap();
