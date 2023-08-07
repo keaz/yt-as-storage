@@ -13,7 +13,7 @@ use std::env;
 
 
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc};
 use std::{fs, fs::OpenOptions, io::prelude::*, process::Command};
 use crossbeam_utils::sync::WaitGroup;
 
@@ -50,7 +50,7 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
 
     io::clear_vid2fps(output_folder);
 
-    let progress_bar = Arc::new(ProgressBar::new(input_handler.get_file_size() / res_bit));
+    let progress_bar = Arc::new(ProgressBar::new((input_handler.get_file_size() / res_bit) + 1));
     let total_frames = input_handler.get_file_size() / res_bit;
     info!("Generating {} frames", total_frames);
 
@@ -126,7 +126,7 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
 
 #[cfg(target_os = "windows")]
 fn execute_video_out_ffmped(output_path: &String) {
-    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}vidout/video.mp4",output_path,output_path);
+    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",output_path,output_path);
     Command::new("powershell")
         .args(&[
             "/C",
@@ -175,9 +175,7 @@ pub fn read_video_in(input_file: &String,output_folder: &String) {
 
         let data = OutputHandler::decode_frames(format!("{:04}", img_index).as_str(),output_folder);
 
-        if let Err(e) = writeln!(file, "{}", data.as_str()) {
-            eprintln!("Couldn't write to file: {}", e);
-        }
+        file.write(data.as_bytes()).expect("Unable to write data");
 
         if img_index == frame_count {
             break;

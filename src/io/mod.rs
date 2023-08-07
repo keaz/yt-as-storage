@@ -87,9 +87,7 @@ impl OutputHandler {
     }
 
     pub fn decode_frames(img_index: &str, output_folder: &String) -> String {
-        let mut img_name: String = format!("{}/vid2fps/extracted{}.png",output_folder,img_index);
-        // img_name.push_str(img_index);
-        // img_name.push_str(".png");
+        let img_name: String = format!("{}/vid2fps/extracted{}.png",output_folder,img_index);
 
         let img = image::open(img_name).unwrap();
 
