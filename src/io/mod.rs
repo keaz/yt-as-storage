@@ -8,10 +8,19 @@ use std::{
     io::{Error, Read, Seek, SeekFrom},
     path::Path,
     str,
+    sync::{Arc, Mutex},
 };
 
 pub struct InputHandler {
-    file: File,
+    file: Arc<Mutex<File>>,
+}
+
+impl Clone for InputHandler {
+    fn clone(&self) -> Self {
+        Self {
+            file: self.file.clone(),
+        }
+    }
 }
 
 impl InputHandler {
@@ -19,17 +28,22 @@ impl InputHandler {
         let path = Path::new(file_path);
         let file = File::open(path).unwrap();
         debug!("New file opened {:?}", file);
-        InputHandler { file }
+        InputHandler {
+            file: Arc::new(Mutex::new(file)),
+        }
     }
 
     pub fn get_file_size(&mut self) -> u64 {
-        self.file.metadata().unwrap().len()
+        self.file.lock().unwrap().metadata().unwrap().len()
+        // self.file.metadata().unwrap().len()
     }
 
     pub fn read_input_data(&mut self, offset: u64, buf: &mut [u8]) -> usize {
         // debug!("Reading offset {:?}",offset);
-        self.file.seek(SeekFrom::Start(offset)).unwrap();
-        let read_data = self.file.read(buf).unwrap();
+        let file = self.file.clone();
+        let mut file = file.lock().unwrap();
+        (*file).seek(SeekFrom::Start(offset)).unwrap();
+        let read_data = file.read(buf).unwrap();
         // debug!("Data read {:?}",read_data);
 
         read_data
@@ -172,4 +186,24 @@ fn delete_dir_contents(read_dir_res: Result<ReadDir, Error>) {
             };
         }
     };
+}
+
+pub struct Data {
+    pub index: u64,
+    pub buf: Vec<u8>,
+}
+
+impl Data {
+    pub fn new(index: u64, buf: Vec<u8>) -> Self {
+        Data { index, buf }
+    }
+}
+
+impl Clone for Data {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index.clone(),
+            buf: self.buf.clone(),
+        }
+    }
 }
