@@ -50,8 +50,8 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
 
     io::clear_vid2fps(output_folder);
 
-    let progress_bar = Arc::new(ProgressBar::new((input_handler.get_file_size() / res_bit) + 1));
-    let total_frames = input_handler.get_file_size() / res_bit;
+    let total_frames = (input_handler.get_file_size() / res_bit) + 1;
+    let progress_bar = Arc::new(ProgressBar::new(total_frames));
     info!("Generating {} frames", total_frames);
 
     let pool = rayon::ThreadPoolBuilder::new()
