@@ -53,7 +53,7 @@ impl InputHandler {
 pub struct OutputHandler {}
 
 impl OutputHandler {
-    pub fn encode_frames(buf: &[u8], img_index: &str) {
+    pub fn encode_frames(buf: &[u8], img_index: &str, output_file: &String) {
         let mut img = RgbImage::new(256, 144);
 
         let mut all_bits = "".to_string();
@@ -80,7 +80,7 @@ impl OutputHandler {
 
         let img_scaled = resize(&img, 1280, 720, Nearest);
 
-        let img_name = &format!("vid2fps/output{}.png", img_index);
+        let img_name = &format!("{}/vid2fps/output{}.png", output_file, img_index);
 
         // write it out to a file
         img_scaled.save(img_name).unwrap();
@@ -140,19 +140,19 @@ fn bin_str_to_word(bin_str: &str) -> String {
         .collect()
 }
 
-pub fn clear_vid2fps() {
-    let vid2fps_dir = fs::read_dir("vid2fps");
+pub fn clear_vid2fps(output_folder: &String) {
+    let vid2fps_dir = fs::read_dir(format!("{}/vid2fps", output_folder));
     delete_dir_contents(vid2fps_dir);
 }
 
-pub fn clear_vidout() {
-    let vidout_dir = fs::read_dir("vidout");
+pub fn clear_vidout(output_folder: &String) {
+    let vidout_dir = fs::read_dir(format!("{}/vidout", output_folder));
     delete_dir_contents(vidout_dir);
 }
 
-pub fn create_dirs(dirs: Vec<&str>) {
+pub fn create_dirs(dirs: Vec<String>) {
     for dir in dirs {
-        fs::create_dir_all(dir).expect(format!("Failed to create {} dir", dir).as_str());
+        fs::create_dir_all(dir.clone()).expect(format!("Failed to create {:?} dir", dir).as_str());
     }
 }
 

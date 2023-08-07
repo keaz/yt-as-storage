@@ -7,50 +7,52 @@ use env_logger::Env;
 
 use indicatif::ProgressBar;
 use io::{InputHandler, OutputHandler};
-use log::{info, debug};
+use log::{debug, info};
 
 use std::env;
-use std::process::exit;
+
 
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{fs, fs::OpenOptions, io::prelude::*, process::Command};
 
 use crate::io::Data;
 
 fn main() {
     env_logger::init_from_env(Env::default().default_filter_or("info"));
-    io::create_dirs(vec!["vid2fps", "vidout", "vidin", "textout", "textin"]);
 
     let cmd = cmd::CmdArgs::parse_from(env::args_os());
 
-    loop {
-        let mut line = String::new();
-        println!("Enter encode or decode (e/d) of the input file? [q for quit]:");
-        std::io::stdin().read_line(&mut line).unwrap();
+    let vid2fps = format!("{}/vid2fps", &cmd.output_path);
+    let vidout = format!("{}/vidout", &cmd.output_path);
+    let vidin = format!("{}/vidin", &cmd.output_path);
+    let textout = format!("{}/textout", &cmd.output_path);
 
-        if line.trim_end().to_string() == "e" {
-            create_video_out(&&cmd.file_path);
-        } else if line.trim_end().to_string() == "d" {
-            read_video_in();
-        } else if line.trim_end().to_string() == "q" {
-            exit(0);
+    io::create_dirs(vec![vid2fps, vidout, vidin, textout]);
+
+    match cmd.mode {
+        cmd::Mode::Encode => {
+            create_video_out(&cmd.file_path, &cmd.output_path);
+        }
+        cmd::Mode::Decode => {
+            read_video_in(&cmd.output_path);
         }
     }
 }
 
-pub fn create_video_out(input_file: &String) {
+pub fn create_video_out(input_file: &String, output_folder: &String) {
+    debug!("Started to create viode out for file {}", input_file);
     let mut input_handler = InputHandler::new(&input_file);
 
     let res_bit = (256 * 144) / 8 as u64;
     let buf_size = res_bit as usize;
 
-    io::clear_vid2fps();
+    io::clear_vid2fps(output_folder);
 
     let progress_bar = Arc::new(ProgressBar::new(input_handler.get_file_size() / res_bit));
     let total_frames = input_handler.get_file_size() / res_bit;
-    info!("Generating frames: {}", total_frames);
-  
+    info!("Generating {} frames", total_frames);
+
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(8)
         .build()
@@ -77,9 +79,14 @@ pub fn create_video_out(input_file: &String) {
     }
 
     for data in receiver {
+        let output_folder = output_folder.clone();
         let progress_bar = progress_bar.clone();
         pool.spawn(move || {
-            OutputHandler::encode_frames(&data.buf, format!("{:04}", data.index).as_str());
+            OutputHandler::encode_frames(
+                &data.buf,
+                format!("{:04}", data.index).as_str(),
+                &output_folder,
+            );
             debug!("Encoding image {}", data.index);
             progress_bar.inc(1);
         });
@@ -89,14 +96,14 @@ pub fn create_video_out(input_file: &String) {
 
     info!("Combining frames");
 
-    // let progress_spinner = utils::progress();
+    let progress_spinner = utils::progress();
 
-    io::clear_vidout();
+    io::clear_vidout(output_folder);
     execute_video_out_ffmped();
 
-    io::clear_vid2fps();
+    io::clear_vid2fps(output_folder);
 
-    // progress_spinner.finish_with_message("Successfully created the video.\n");
+    progress_spinner.finish_with_message("Successfully created the video.\n");
 }
 
 #[cfg(target_os = "windows")]
@@ -121,14 +128,14 @@ fn execute_video_out_ffmped() {
         .unwrap();
 }
 
-pub fn read_video_in() {
+pub fn read_video_in(output_folder: &String) {
     info!("Reading the frames from the video");
 
     let progress_spinner = utils::progress();
 
     let mut img_index = 0;
 
-    io::clear_vid2fps();
+    io::clear_vid2fps(output_folder);
 
     execute_ffmpeg();
 
