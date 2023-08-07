@@ -86,10 +86,10 @@ impl OutputHandler {
         img_scaled.save(img_name).unwrap();
     }
 
-    pub fn decode_frames(img_index: &str) -> String {
-        let mut img_name: String = "vid2fps/extracted".to_owned();
-        img_name.push_str(img_index);
-        img_name.push_str(".png");
+    pub fn decode_frames(img_index: &str, output_folder: &String) -> String {
+        let mut img_name: String = format!("{}/vid2fps/extracted{}.png",output_folder,img_index);
+        // img_name.push_str(img_index);
+        // img_name.push_str(".png");
 
         let img = image::open(img_name).unwrap();
 

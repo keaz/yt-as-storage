@@ -36,7 +36,7 @@ fn main() {
             create_video_out(&cmd.file_path, &cmd.output_path);
         }
         cmd::Mode::Decode => {
-            read_video_in(&cmd.output_path);
+            read_video_in(&cmd.file_path,&cmd.output_path);
         }
     }
 }
@@ -149,7 +149,7 @@ fn execute_video_out_ffmped(output_path: &String) {
         .unwrap();
 }
 
-pub fn read_video_in(output_folder: &String) {
+pub fn read_video_in(input_file: &String,output_folder: &String) {
     info!("Reading the frames from the video");
 
     let progress_spinner = utils::progress();
@@ -158,22 +158,22 @@ pub fn read_video_in(output_folder: &String) {
 
     io::clear_vid2fps(output_folder);
 
-    execute_ffmpeg();
-
-    let frame_count = fs::read_dir("vid2fps").unwrap().count();
-
-    fs::remove_file("textout/decoded_video.txt").ok();
+    execute_ffmpeg(input_file,output_folder);
+    let frame_folder = format!("{}/vid2fps",output_folder);
+    let frame_count = fs::read_dir(frame_folder).unwrap().count();
+    let out_txt = format!("{}/textout/decoded_video.txt",output_folder);
+    fs::remove_file(&out_txt).ok();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
-        .open("textout/decoded_video.txt")
+        .open(&out_txt)
         .unwrap();
 
     loop {
         img_index += 1;
 
-        let data = OutputHandler::decode_frames(format!("{:04}", img_index).as_str());
+        let data = OutputHandler::decode_frames(format!("{:04}", img_index).as_str(),output_folder);
 
         if let Err(e) = writeln!(file, "{}", data.as_str()) {
             eprintln!("Couldn't write to file: {}", e);
@@ -188,10 +188,10 @@ pub fn read_video_in(output_folder: &String) {
 }
 
 #[cfg(target_os = "windows")]
-fn execute_ffmpeg() {
+fn execute_ffmpeg(input_file: &String,output_folder: &String) {
     let ffmpeg_cmd = &format!(
-        "ffmpeg -i '{}' -vf fps=1 vid2fps/extracted%04d.png",
-        io::get_first_in_dir(fs::read_dir("vidin"))
+        "ffmpeg -i '{}' -vf fps=1 {}/vid2fps/extracted%04d.png",
+        input_file ,output_folder
     );
 
     Command::new("powershell")
@@ -201,10 +201,10 @@ fn execute_ffmpeg() {
 }
 
 #[cfg(target_os = "linux")]
-fn execute_ffmpeg() {
+fn execute_ffmpeg(input_file: &String,output_folder: &String) {
     let ffmpeg_cmd = &format!(
-        "ffmpeg -i '{}' -vf fps=1 vid2fps/extracted%04d.png",
-        io::get_first_in_dir(fs::read_dir("vidin"))
+        "ffmpeg -i '{}' -vf fps=1 {}/vid2fps/extracted%04d.png",
+        input_file ,output_folder
     );
 
     Command::new("sh")
