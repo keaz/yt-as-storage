@@ -1,14 +1,14 @@
-use std::{
-    fs::{self, File, ReadDir},
-    io::{Read, Seek, SeekFrom, Error},
-    path::Path,
-    str
-};
 use image::{
+    imageops::{resize, Nearest},
     Rgb, RgbImage,
-    imageops::{resize, Nearest}
 };
 use log::debug;
+use std::{
+    fs::{self, File, ReadDir},
+    io::{Error, Read, Seek, SeekFrom},
+    path::Path,
+    str,
+};
 
 pub struct InputHandler {
     file: File,
@@ -32,17 +32,14 @@ impl InputHandler {
         let read_data = self.file.read(buf).unwrap();
         // debug!("Data read {:?}",read_data);
 
-        read_data   
+        read_data
     }
 }
 
-pub struct OutputHandler {
-}
+pub struct OutputHandler {}
 
 impl OutputHandler {
-
     pub fn encode_frames(buf: &[u8], img_index: &str) {
-
         let mut img = RgbImage::new(256, 144);
 
         let mut all_bits = "".to_string();
@@ -55,7 +52,11 @@ impl OutputHandler {
             for x in 0..256 {
                 if 0 < all_bits.len() {
                     let current_bit = if all_bits.remove(0) == '1' { 1 } else { 0 };
-                    img.put_pixel(x, y, Rgb([255*current_bit, 255*current_bit, 255*current_bit]));
+                    img.put_pixel(
+                        x,
+                        y,
+                        Rgb([255 * current_bit, 255 * current_bit, 255 * current_bit]),
+                    );
                 } else {
                     img.put_pixel(x, y, Rgb([255, 0, 0]));
                     break 'outer;
@@ -72,7 +73,6 @@ impl OutputHandler {
     }
 
     pub fn decode_frames(img_index: &str) -> String {
-
         let mut img_name: String = "vid2fps/extracted".to_owned();
         img_name.push_str(img_index);
         img_name.push_str(".png");
@@ -87,7 +87,6 @@ impl OutputHandler {
 
         'outer: for y in 0..144 {
             for x in 0..256 {
-
                 let mut s = img_scaled.get_pixel(x, y).to_owned();
 
                 for i in 0..3 {
@@ -112,17 +111,16 @@ impl OutputHandler {
                     all_bits.push_str(" ");
                     pushed_bits = 0;
                 }
-
             }
         }
 
         bin_str_to_word(all_bits.as_str().trim_end())
     }
-
 }
 
 fn bin_str_to_word(bin_str: &str) -> String {
-    bin_str.split(" ")
+    bin_str
+        .split(" ")
         .map(|n| u32::from_str_radix(n, 2).unwrap())
         .map(|c| char::from_u32(c).unwrap())
         .collect()

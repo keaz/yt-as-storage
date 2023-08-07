@@ -19,7 +19,7 @@ pub fn progress() -> ProgressBar {
                 " ▶     ⛔   ◀ ",
                 " ▶    ⛔    ◀ ",
                 " ▶   ⛔     ◀ ",
-                " ▶  ⛔      ◀ "
+                " ▶  ⛔      ◀ ",
             ]),
     );
     pb.set_message("Processing...");
