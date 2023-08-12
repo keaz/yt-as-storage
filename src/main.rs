@@ -11,11 +11,10 @@ use log::{debug, info};
 
 use std::env;
 
-
-use std::sync::mpsc::channel;
-use std::sync::{Arc};
-use std::{fs, fs::OpenOptions, io::prelude::*, process::Command};
 use crossbeam_utils::sync::WaitGroup;
+use std::sync::mpsc::channel;
+use std::sync::Arc;
+use std::{fs, fs::OpenOptions, io::prelude::*, process::Command};
 
 use crate::io::Data;
 
@@ -36,7 +35,7 @@ fn main() {
             create_video_out(&cmd.file_path, &cmd.output_path);
         }
         cmd::Mode::Decode => {
-            read_video_in(&cmd.file_path,&cmd.output_path);
+            read_video_in(&cmd.file_path, &cmd.output_path);
         }
     }
 }
@@ -59,7 +58,6 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
         .build()
         .unwrap();
     let (sender, receiver) = channel();
-
 
     let wg = WaitGroup::new();
 
@@ -103,7 +101,7 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
             progress_bar.inc(1);
             drop(wg);
         });
-        index +=1;
+        index += 1;
         if index == total_frames {
             break;
         }
@@ -124,32 +122,28 @@ pub fn create_video_out(input_file: &String, output_folder: &String) {
     progress_spinner.finish_with_message("Successfully created the video.\n");
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_family = "windows")]
 fn execute_video_out_ffmped(output_path: &String) {
-    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",output_path,output_path);
+    let cmd = format!(
+        "ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",
+        output_path, output_path
+    );
     Command::new("powershell")
-        .args(&[
-            "/C",
-            &cmd,
-        ])
+        .args(&["/C", &cmd])
         .output()
         .expect("failed to execute process");
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(target_family = "unix")]
 fn execute_video_out_ffmped(output_path: &String) {
-
-    let cmd = format!("ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",output_path,output_path);
-    Command::new("sh")
-        .args(&[
-            "-c",
-            &cmd,
-        ])
-        .output()
-        .unwrap();
+    let cmd = format!(
+        "ffmpeg -framerate 1 -i {}/vid2fps/output%04d.png -r 30 {}/vidout/video.mp4",
+        output_path, output_path
+    );
+    Command::new("sh").args(&["-c", &cmd]).output().unwrap();
 }
 
-pub fn read_video_in(input_file: &String,output_folder: &String) {
+pub fn read_video_in(input_file: &String, output_folder: &String) {
     info!("Reading the frames from the video");
 
     let progress_spinner = utils::progress();
@@ -158,10 +152,10 @@ pub fn read_video_in(input_file: &String,output_folder: &String) {
 
     io::clear_vid2fps(output_folder);
 
-    execute_ffmpeg(input_file,output_folder);
-    let frame_folder = format!("{}/vid2fps",output_folder);
+    execute_ffmpeg(input_file, output_folder);
+    let frame_folder = format!("{}/vid2fps", output_folder);
     let frame_count = fs::read_dir(frame_folder).unwrap().count();
-    let out_txt = format!("{}/textout/decoded_video.txt",output_folder);
+    let out_txt = format!("{}/textout/decoded_video.txt", output_folder);
     fs::remove_file(&out_txt).ok();
     let mut file = OpenOptions::new()
         .create(true)
@@ -173,7 +167,8 @@ pub fn read_video_in(input_file: &String,output_folder: &String) {
     loop {
         img_index += 1;
 
-        let data = OutputHandler::decode_frames(format!("{:04}", img_index).as_str(),output_folder);
+        let data =
+            OutputHandler::decode_frames(format!("{:04}", img_index).as_str(), output_folder);
 
         file.write(data.as_bytes()).expect("Unable to write data");
 
@@ -185,11 +180,11 @@ pub fn read_video_in(input_file: &String,output_folder: &String) {
     progress_spinner.finish_with_message("Successfully decoded the video.\n");
 }
 
-#[cfg(target_os = "windows")]
-fn execute_ffmpeg(input_file: &String,output_folder: &String) {
+#[cfg(target_family = "windows")]
+fn execute_ffmpeg(input_file: &String, output_folder: &String) {
     let ffmpeg_cmd = &format!(
         "ffmpeg -i '{}' -vf fps=1 {}/vid2fps/extracted%04d.png",
-        input_file ,output_folder
+        input_file, output_folder
     );
 
     Command::new("powershell")
@@ -198,11 +193,11 @@ fn execute_ffmpeg(input_file: &String,output_folder: &String) {
         .unwrap();
 }
 
-#[cfg(target_os = "linux")]
-fn execute_ffmpeg(input_file: &String,output_folder: &String) {
+#[cfg(target_family = "unix")]
+fn execute_ffmpeg(input_file: &String, output_folder: &String) {
     let ffmpeg_cmd = &format!(
         "ffmpeg -i '{}' -vf fps=1 {}/vid2fps/extracted%04d.png",
-        input_file ,output_folder
+        input_file, output_folder
     );
 
     Command::new("sh")
